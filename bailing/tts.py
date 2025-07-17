@@ -7,6 +7,7 @@ import uuid
 import wave
 from abc import ABC, ABCMeta, abstractmethod
 from datetime import datetime
+from functools import partial
 import pyaudio
 from pydub import AudioSegment
 from gtts import gTTS
@@ -15,6 +16,14 @@ import ChatTTS
 import torch
 import torchaudio
 import soundfile as sf
+
+import queue
+try:
+    import tritonclient.grpc as grpcclient
+    import numpy as np
+except ImportError:
+    grpcclient = None
+    np = None
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +209,95 @@ class KOKOROTTS(AbstractTTS):
             logger.error(f"Failed to generate TTS file: {e}")
             return None
 
+
+class CWTTS(AbstractTTS):
+    def __init__(self, config):
+        if grpcclient is None or np is None:
+            raise ImportError("tritonclient[grpc] 和 numpy 未安装，请先安装依赖。")
+        self.output_file = config.get("output_file", "tmp/")
+        self.url = config.get("url")
+        self.model_name = config.get("model_name", "cloudsway_tts")
+        self.voice_id = config.get("voice_id", "infer_2_moan_1")
+        self.language = config.get("language", "zh")
+        self.sample_rate = int(config.get("sample_rate", 16000))
+        self.api_key = config.get("api_key", "")
+
+    def _generate_filename(self, extension=".wav"):
+        return os.path.join(self.output_file, f"tts-{datetime.now().date()}@{uuid.uuid4().hex}{extension}")
+
+    def _log_execution_time(self, start_time):
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.debug(f"Execution Time: {execution_time:.2f} seconds")
+
+    def to_tts(self, text):
+        tmpfile = self._generate_filename(".wav")
+        start_time = time.time()
+        user_data = type('UserData', (), {})()
+        user_data._completed_requests = queue.Queue()
+        try:
+            inputs = []
+            # voice_id
+            ref_audio = grpcclient.InferInput("voice_id", [1], "BYTES")
+            ref_audio.set_data_from_numpy(np.array([self.voice_id], dtype=np.object_))
+            inputs.append(ref_audio)
+            # language
+            lang_input = grpcclient.InferInput("language", [1], "BYTES")
+            lang_input.set_data_from_numpy(np.array([self.language], dtype=np.object_))
+            inputs.append(lang_input)
+            # text
+            prompt_text = grpcclient.InferInput("text", [1], "BYTES")
+            prompt_text.set_data_from_numpy(np.array([text], dtype=np.object_))
+            inputs.append(prompt_text)
+            # sample_rate
+            sample_rate_input = grpcclient.InferInput("sample_rate", [1], "INT32")
+            sample_rate_input.set_data_from_numpy(np.array([self.sample_rate], dtype=np.int32))
+            inputs.append(sample_rate_input)
+            # api_key
+            api_key_input = grpcclient.InferInput("api_key", [1], "BYTES")
+            api_key_input.set_data_from_numpy(np.array([self.api_key], dtype=np.object_))
+            inputs.append(api_key_input)
+
+            def callback(user_data, result, error):
+                if error:
+                    user_data._completed_requests.put(error)
+                else:
+                    user_data._completed_requests.put(result)
+
+            with grpcclient.InferenceServerClient(url=self.url) as client:
+                client.start_stream(callback=partial(callback, user_data))
+                client.async_stream_infer(
+                    model_name=self.model_name,
+                    inputs=inputs,
+                    outputs=[grpcclient.InferRequestedOutput("wav_output")]
+                )
+                
+                # 收集所有音频数据块
+                audio_data = b''
+                while True:
+                    result = user_data._completed_requests.get()
+                    if isinstance(result, Exception):
+                        logger.error(f"TTS流式推理异常: {result}")
+                        return None
+                    audio_chunk = result.as_numpy("wav_output")[0]
+                    if audio_chunk == b'%END%':
+                        break
+                    audio_data += audio_chunk
+                
+                # 将收集的音频数据转换为numpy数组并保存为WAV
+                if len(audio_data) > 0:
+                    # 假设音频数据是16位PCM格式
+                    audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                    # 使用soundfile保存为WAV格式
+                    sf.write(tmpfile, audio_array.astype(np.float32) / 32768.0, self.sample_rate)
+                else:
+                    logger.error("CWTTS: 没有收到有效的音频数据")
+                    return None
+            self._log_execution_time(start_time)
+            return tmpfile
+        except Exception as e:
+            logger.error(f"CWTTS生成TTS文件失败: {e}")
+            return None
 
 
 def create_instance(class_name, *args, **kwargs):

@@ -12,11 +12,17 @@ interrupt: false
 StartTaskMode: true
 # 具体处理时选择的模块
 selected_module:
+  # Recorder: RecorderPyAudio
+  # ASR: FunASR
+  # VAD: SileroVAD
+  # LLM: OpenAILLM
+  # TTS: EdgeTTS
+  # Player: PygameSoundPlayer
   Recorder: RecorderPyAudio
   ASR: FunASR
   VAD: SileroVAD
-  LLM: OpenAILLM
-  TTS: EdgeTTS
+  LLM: BaiDuLLM
+  TTS: CWTTS
   Player: PygameSoundPlayer
 
 Recorder:
@@ -25,7 +31,7 @@ Recorder:
 
 ASR:
   FunASR:
-    model_dir: models/SenseVoiceSmall
+    model_dir: /Users/liutao/PycharmProjects/bailing/models/SenseVoiceSmall
     output_file: tmp/
 
 VAD:
@@ -38,7 +44,17 @@ LLM:
   OpenAILLM:
     model_name: deepseek-chat
     url: https://api.deepseek.com
-    api_key:
+    api_key: sk-61cdda4b56e74b36828e2c060fa8a710
+  BaiDuLLM:
+    api_url: https://qianfan.baidubce.com/v2/chat/completions
+    api_key: bce-v3/ALTAK-DjBrg6HP36lGomporE2iT/3a509ddcafca5e22cea75c85f5bd9b9e11f8d192
+    app_id: ""
+    model_name: c0jkrl3v_dt24b
+    temperature: 1
+    top_p: 0.5
+    penalty_score: 1
+    safety:
+      input_level: "none"
 
 TTS:
   MacTTS:
@@ -58,6 +74,14 @@ TTS:
     output_file: tmp/
     lang: z
     voice: zm_yunyang
+  CWTTS:
+    url: 116.148.216.100:8001
+    model_name: cloudsway_tts_zh
+    output_file: tmp/
+    voice_id: Isabella_open
+    language: zh
+    sample_rate: 16000
+    api_key: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4OWY2MTcyMi0yYjAwLTQ4NDAtOGNlMS1mNzc3YTlhODI5NWIiLCJ1c2VyX25hbWUiOiJ0b255IiwiaWF0IjoxNzUyNzM0MzMyLCJleHAiOjIwNjgwOTQzMzIsImdyb3VwX25hbWUiOiIiLCJncm91cF9pZCI6IiIsIm1haWwiOiJ0b255QGV4YW1wbGUuY29tIiwidG9rZW5fdHlwZSI6MSwiaXNzIjoiY2xvdWRzd2F5In0.ZHZDzehyTymCuwtYMFc75LMxN9CHEyLOqCu59ByS3IRYLI7P186CZNR8S2r2b41zfzIaCafXJlbAVCQQTovSzTLfaf87VsQE1gB8RDPWngMOysYF2wTIvL6T2wn-y5XuDtjiliU1jrEdWSLFm5hXcy8M-3mY680tMmlWxkHuw-cF-1ZxkDRF4ipF5JwDdwseuJtLM2j8pLv_ryJus-Bb5TYRS-opUbUGco6gZUHcJktZUhIuYC5h0L_rjbh5peX6A-c2xFJX7Wp1Bu8afBTZTAw7RJuzk9IUURWHYJm4BlNC3NGyFS6579bx73r682S2ST0WWn_WLZGW55q8UMAFKg"
 
 Player:
   PygameSoundPlayer: null
@@ -70,14 +94,14 @@ Rag:
   emb_model: models/bge-small-zh
   model_name: deepseek-chat
   url: https://api.deepseek.com
-  api_key: null
+  api_key: sk-61cdda4b56e74b36828e2c060fa8a710
 
 Memory:
   dialogue_history_path: tmp/
   memory_file: tmp/memory.json
   model_name: deepseek-chat
   url: https://api.deepseek.com
-  api_key: null
+  api_key: sk-61cdda4b56e74b36828e2c060fa8a710
 
 TaskManager:
   functions_call_name: plugins/function_calls_config.json
